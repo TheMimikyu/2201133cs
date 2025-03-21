@@ -37,6 +37,22 @@ const cacheService = {
     postsCache.set(`user_posts_${userId}`, posts);
   },
   
+  getLatestPosts() {
+    return postsCache.get('latest_posts');
+  },
+  
+  setLatestPosts(posts) {
+    postsCache.set('latest_posts', posts);
+  },
+  
+  getPopularPosts() {
+    return postsCache.get('popular_posts');
+  },
+  
+  setPopularPosts(posts) {
+    postsCache.set('popular_posts', posts);
+  },
+
   clearCache() {
     usersCache.flushAll();
     postsCache.flushAll();

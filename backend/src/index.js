@@ -46,6 +46,50 @@ app.get('/users', async (req, res) => {
   }
 });
 
+// New endpoint for posts
+app.get('/posts', async (req, res) => {
+  const type = req.query.type || 'latest';
+  
+  try {
+    if (type === 'latest') {
+      // Check cache first
+      const cachedLatestPosts = cacheService.getLatestPosts();
+      if (cachedLatestPosts) {
+        return res.json(cachedLatestPosts);
+      }
+      
+      // If not in cache, fetch from API
+      const latestPosts = await apiService.getLatestPosts();
+      
+      // Store in cache for future requests
+      cacheService.setLatestPosts(latestPosts);
+      
+      return res.json(latestPosts);
+    } 
+    else if (type === 'popular') {
+      // Check cache first
+      const cachedPopularPosts = cacheService.getPopularPosts();
+      if (cachedPopularPosts) {
+        return res.json(cachedPopularPosts);
+      }
+      
+      // If not in cache, fetch from API
+      const popularPosts = await apiService.getPopularPosts();
+      
+      // Store in cache for future requests
+      cacheService.setPopularPosts(popularPosts);
+      
+      return res.json(popularPosts);
+    }
+    else {
+      return res.status(400).json({ error: 'Invalid type parameter. Use "latest" or "popular".' });
+    }
+  } catch (error) {
+    console.error('Error in /posts endpoint:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
 });

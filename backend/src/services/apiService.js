@@ -118,6 +118,70 @@ const apiService = {
     }
     
     return topUsers;
+  },
+
+  // New method to fetch all posts from all users
+  async fetchAllPosts() {
+    try {
+      const users = await this.fetchUsers();
+      let allPosts = [];
+      
+      // Fetch posts for each user
+      for (const userId of Object.keys(users)) {
+        const userPosts = await this.fetchUserPosts(userId);
+        allPosts = allPosts.concat(userPosts.map(post => ({
+          ...post,
+          username: users[userId]
+        })));
+      }
+      
+      return allPosts;
+    } catch (error) {
+      console.error('Error fetching all posts:', error.message);
+      return [];
+    }
+  },
+
+  // Method to get the latest 5 posts
+  async getLatestPosts() {
+    const allPosts = await this.fetchAllPosts();
+    
+    // Sort posts by id (descending) - higher id means newer post
+    return allPosts
+      .sort((a, b) => b.id - a.id)
+      .slice(0, 5);
+  },
+
+  // Method to get popular posts (posts with maximum comments)
+  async getPopularPosts() {
+    try {
+      const allPosts = await this.fetchAllPosts();
+      
+      // Fetch comment counts for all posts
+      const postsWithCommentCounts = await Promise.all(
+        allPosts.map(async (post) => {
+          const comments = await this.fetchPostComments(post.id);
+          return {
+            ...post,
+            commentCount: comments.length
+          };
+        })
+      );
+      
+      // Find the maximum comment count
+      const maxComments = Math.max(
+        ...postsWithCommentCounts.map(post => post.commentCount),
+        0  // Default to 0 if there are no posts
+      );
+      
+      // Return all posts with the maximum comment count
+      return postsWithCommentCounts
+        .filter(post => post.commentCount === maxComments)
+        .sort((a, b) => b.id - a.id); // Sort by newest first
+    } catch (error) {
+      console.error('Error getting popular posts:', error.message);
+      return [];
+    }
   }
 };
 
