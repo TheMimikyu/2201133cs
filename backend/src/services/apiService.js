@@ -13,13 +13,22 @@ const latestPostsCache = new NodeCache();
 const popularPostsCache = new NodeCache();
 
 const authData = {
-    "companyName": "goMart",
-    "clientID": "988dc1d6-67b9-495a-9345-614ead9a3ebf",
-    "clientSecret": "ZfvsoOQefVEUVlYj",
-    "ownerName": "Vedant Yadav",
-    "ownerEmail": "vedant.2201133cs@iiitbh.ac.in",
-    "rollNo": "2201133cs"
+    "companyName": process.env.COMPANY_NAME,
+    "clientID": process.env.CLIENT_ID,
+    "clientSecret": process.env.CLIENT_SECRET,
+    "ownerName": process.env.OWNER_NAME,
+    "ownerEmail": process.env.OWNER_EMAIL,
+    "rollNo": process.env.ROLL_NO
 };
+
+// Validate required environment variables
+const requiredEnvVars = ['COMPANY_NAME', 'CLIENT_ID', 'CLIENT_SECRET', 'OWNER_NAME', 'OWNER_EMAIL', 'ROLL_NO'];
+for (const envVar of requiredEnvVars) {
+    if (!process.env[envVar]) {
+        console.error(`Error: Environment variable ${envVar} is required but not set`);
+        process.exit(1); // Exit with error if any required var is missing
+    }
+}
 
 const apiService = {
   async authenticate() {
