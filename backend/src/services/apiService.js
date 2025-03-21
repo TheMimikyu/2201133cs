@@ -7,14 +7,18 @@ dotenv.config();
 
 const BASE_URL = process.env.TEST_SERVER_URL;
 const authCache = new NodeCache();
+// Add caches for users and posts
+const userCache = new NodeCache();
+const latestPostsCache = new NodeCache();
+const popularPostsCache = new NodeCache();
 
 const authData = {
-  companyName: "goMart", 
-  clientID: "eaf55302-26b8-47b6-9a9c-eaf8f9eb5fe9", 
-  clientSecret: "XsLvEzTzyjMOIGtY", 
-  ownerName: "Vedant Yadav", 
-  ownerEmail: "vedant.2201133cs@iiitbh.ac.in", 
-  rollNo: "2201133cs"
+    "companyName": "goMart",
+    "clientID": "988dc1d6-67b9-495a-9345-614ead9a3ebf",
+    "clientSecret": "ZfvsoOQefVEUVlYj",
+    "ownerName": "Vedant Yadav",
+    "ownerEmail": "vedant.2201133cs@iiitbh.ac.in",
+    "rollNo": "2201133cs"
 };
 
 const apiService = {
@@ -66,7 +70,7 @@ const apiService = {
       const response = await axios.get(`${BASE_URL}/users/${userId}/posts`, {
         headers: { Authorization: token }
       });
-      return response.data.posts;
+      return response.data.posts || []; // Ensure we always return an array
     } catch (error) {
       console.error(`Error fetching posts for user ${userId}:`, error.message);
       return [];  // Return empty array in case of error
@@ -88,6 +92,12 @@ const apiService = {
   },
 
   async getTopUsers() {
+    // Check if we have cached data first
+    const cachedUsers = userCache.get('topUsers');
+    if (cachedUsers) {
+      return cachedUsers;
+    }
+
     const users = await this.fetchUsers();
     const userWithPosts = [];
     
@@ -117,6 +127,9 @@ const apiService = {
       topUsers.unshift(heap.extractMin());
     }
     
+    // Cache the results
+    userCache.set('topUsers', topUsers);
+    
     return topUsers;
   },
 
@@ -124,15 +137,24 @@ const apiService = {
   async fetchAllPosts() {
     try {
       const users = await this.fetchUsers();
+      if (!users) {
+        console.error('No users returned from API');
+        return [];
+      }
+      
       let allPosts = [];
       
       // Fetch posts for each user
       for (const userId of Object.keys(users)) {
-        const userPosts = await this.fetchUserPosts(userId);
-        allPosts = allPosts.concat(userPosts.map(post => ({
-          ...post,
-          username: users[userId]
-        })));
+        const userPosts = await this.fetchUserPosts(userId) || [];
+        if (Array.isArray(userPosts)) {
+          allPosts = allPosts.concat(userPosts.map(post => ({
+            ...post,
+            username: users[userId]
+          })));
+        } else {
+          console.warn(`Posts for user ${userId} is not an array:`, userPosts);
+        }
       }
       
       return allPosts;
@@ -144,6 +166,12 @@ const apiService = {
 
   // Method to get the latest 5 posts using max heap
   async getLatestPosts() {
+    // Check if we have cached data first
+    const cachedPosts = latestPostsCache.get('latestPosts');
+    if (cachedPosts) {
+      return cachedPosts;
+    }
+    
     try {
       const allPosts = await this.fetchAllPosts();
       
@@ -162,6 +190,9 @@ const apiService = {
         latestPosts.push(maxHeap.extractMax());
       }
       
+      // Cache the results
+      latestPostsCache.set('latestPosts', latestPosts);
+      
       return latestPosts;
     } catch (error) {
       console.error('Error getting latest posts:', error.message);
@@ -171,6 +202,12 @@ const apiService = {
 
   // Method to get popular posts (with most comments) using heap
   async getPopularPosts() {
+    // Check if we have cached data first
+    const cachedPosts = popularPostsCache.get('popularPosts');
+    if (cachedPosts) {
+      return cachedPosts;
+    }
+    
     try {
       const allPosts = await this.fetchAllPosts();
       
@@ -203,11 +240,151 @@ const apiService = {
       }
       
       // Sort by newest first within the group
-      return mostCommentedPosts.sort((a, b) => b.id - a.id);
+      const result = mostCommentedPosts.sort((a, b) => b.id - a.id);
+      
+      // Cache the results
+      popularPostsCache.set('popularPosts', result);
+      
+      return result;
     } catch (error) {
       console.error('Error getting popular posts:', error.message);
       return [];
     }
+  },
+  
+  // New method to update caches periodically
+  updatePostsCache: async function() {
+    try {
+      console.log('Updating posts cache...');
+      const allPosts = await this.fetchAllPosts();
+      
+      if (!Array.isArray(allPosts) || allPosts.length === 0) {
+        console.log('No posts to cache');
+        latestPostsCache.set('latestPosts', []);
+        popularPostsCache.set('popularPosts', []);
+        return;
+      }
+      
+      // Update latest posts
+      const latestHeap = new MaxHeap((post) => post.id);
+      for (const post of allPosts) {
+        latestHeap.insert(post);
+      }
+      
+      const latestPosts = [];
+      const extractLatestCount = Math.min(5, latestHeap.size());
+      for (let i = 0; i < extractLatestCount; i++) {
+        latestPosts.push(latestHeap.extractMax());
+      }
+      latestPostsCache.set('latestPosts', latestPosts);
+      
+      // Update popular posts
+      const commentHeap = new MaxHeap((post) => post.commentCount);
+      for (const post of allPosts) {
+        const comments = await this.fetchPostComments(post.id) || [];
+        commentHeap.insert({
+          ...post,
+          commentCount: comments.length
+        });
+      }
+      
+      if (commentHeap.size() > 0) {
+        const topPost = commentHeap.peek();
+        const maxComments = topPost.commentCount;
+        
+        const popularPosts = [];
+        while (commentHeap.size() > 0 && commentHeap.peek().commentCount === maxComments) {
+          popularPosts.push(commentHeap.extractMax());
+        }
+        
+        popularPostsCache.set('popularPosts', popularPosts.sort((a, b) => b.id - a.id));
+      }
+      
+      console.log('Posts cache updated successfully');
+    } catch (error) {
+      console.error('Error updating posts cache:', error.message);
+    }
+  },
+  
+  updateUsersCache: async function() {
+    try {
+      console.log('Updating users cache...');
+      const users = await this.fetchUsers();
+      
+      if (!users) {
+        console.error('No users returned from API');
+        userCache.set('topUsers', []);
+        return;
+      }
+      
+      const userWithPosts = [];
+      
+      for (const [id, name] of Object.entries(users)) {
+        const posts = await this.fetchUserPosts(id) || [];
+        if (Array.isArray(posts)) {
+          userWithPosts.push({
+            id,
+            name,
+            postCount: posts.length
+          });
+        } else {
+          console.warn(`Posts for user ${id} is not an array:`, posts);
+          userWithPosts.push({
+            id, 
+            name,
+            postCount: 0
+          });
+        }
+      }
+      
+      if (userWithPosts.length === 0) {
+        console.log('No user data to cache');
+        userCache.set('topUsers', []);
+        return;
+      }
+      
+      const heap = new MinHeap();
+      userWithPosts.forEach(user => {
+        heap.insert(user);
+        if (heap.size() > 5) {
+          heap.extractMin();
+        }
+      });
+      
+      const topUsers = [];
+      while (heap.size() > 0) {
+        topUsers.unshift(heap.extractMin());
+      }
+      
+      userCache.set('topUsers', topUsers);
+      console.log('Users cache updated successfully');
+    } catch (error) {
+      console.error('Error updating users cache:', error.message);
+      // Set empty cache in case of error
+      userCache.set('topUsers', []);
+    }
+  },
+  
+  // Method to initialize cron jobs
+  initScheduledTasks: function() {
+    // Ensure the authentication is completed first
+    this.getAuthToken().then(() => {
+      // Update posts data every 180 seconds
+      schedule.scheduleJob('*/180 * * * * *', this.updatePostsCache.bind(this));
+      
+      // Update users data every 600 seconds
+      schedule.scheduleJob('*/600 * * * * *', this.updateUsersCache.bind(this));
+      
+      console.log('Scheduled tasks initialized');
+      
+      // Initial update (with slight delay to ensure authentication is complete)
+      setTimeout(() => {
+        this.updatePostsCache();
+        this.updateUsersCache();
+      }, 2000);
+    }).catch(err => {
+      console.error('Failed to initialize scheduled tasks:', err);
+    });
   }
 };
 
@@ -387,5 +564,8 @@ class MaxHeap {
     }
   }
 }
+
+// Initialize scheduled tasks when this module is loaded
+apiService.initScheduledTasks();
 
 export default apiService;
