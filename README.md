@@ -74,7 +74,7 @@ Returns the top 5 users based on their post count.
 ```
 
 **Screenshot:**
-![Top Users Screenshot](screenshots/users.png)
+![Top Users Screenshot](backend/screenshots/users.png)
 
 ### 2. Get Latest Posts
 
@@ -98,7 +98,7 @@ Returns the 5 most recent posts based on post ID.
 ```
 
 **Screenshot:**
-![Latest Posts Screenshot](screenshots/post_latest.png)
+![Latest Posts Screenshot](backend/screenshots/post_latest.png)
 
 ### 3. Get Popular Posts
 
@@ -123,7 +123,7 @@ Returns posts with the highest number of comments.
 ```
 
 **Screenshot:**
-![Popular Posts Screenshot](screenshots/post_popular.png)
+![Popular Posts Screenshot](backend/screenshots/post_popular.png)
 
 ## Environment Configuration
 
